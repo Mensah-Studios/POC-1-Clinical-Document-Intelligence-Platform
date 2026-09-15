@@ -1,0 +1,87 @@
+name: Run Specs and Linter
+run-name: Run Specs
+
+on:
+  pull-request:
+    branches:
+      - integration
+      - main
+
+jobs:
+  checkout_code:
+    name: Checkout Code
+    runs-on: unbuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+  ai_layer_specs_and_pylint:
+    name: Check AI Microservice Specs, Test Coverage and Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install UV
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install dependencies
+        with:
+          script: |
+            set -e
+            cd AI-Layer
+            uv sync
+
+      - name: Check code quality
+        run: uv run pylint --fail-under=8 *.py
+
+      - name: Check if tests are passing
+        run: uv run pytest --cov=src/ai_layer --cov-report=xml Tests/
+    
+
+      - name: Check if additional code has tests
+        run: uv run diff-cover coverage.xml --compare_branch origin/${{  github.base_ref }} --fail-under=90
+      
+  api_layer_specs_and_pylint:
+    name: Run API Specs, Test Coverage and Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install UV
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install dependencies
+        with:
+          script: |
+            set -e
+            cd API-Layer
+            uv sync
+
+      - name: Check code quality
+        run: uv run pylint --fail-under=8 *.py
+
+      - name: Check if tests are passing
+        run: uv run pytest --cov=src/api_layer --cov-report=xml Tests/
+    
+
+      - name: Check if additional code has tests
+        run: uv run diff-cover coverage.xml --compare_branch origin/${{  github.base_ref }} --fail-under=90
+
+  frontend_specs:
+    name: Run Frontend specs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install node/npm
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26.8.1
+          package-manager-cache: false
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Tests
+        run: npm test
+
+
+
+

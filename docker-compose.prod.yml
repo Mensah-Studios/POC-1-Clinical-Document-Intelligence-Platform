@@ -1,0 +1,169 @@
+name: POC-1
+
+servicies:
+  postgres:
+    image: postgres:16-alpine
+    container_name: poc-1-postgres
+    restart: always
+    volumes:
+      - postgres_data_vol:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    envrionment:
+     POSTGRES_USER:
+     POSTGRES_PASSWORD:
+     POSTGRES_DB:
+    deploy:
+      resources:
+        limits:
+          memory: "512M"
+          cpus: "0.4"
+        reservations:
+          memory: "256M"
+    health_check:
+      test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  redis:
+    image: redis:8.10-alpine
+    container_name: poc-1-redis
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    restart: always
+    ports:
+      - 6379:6369
+    deploy:
+      resources:
+        limits:
+          memory: "512M"
+          cpus: "0.4"
+        reservations:
+          memory: "128M"
+    health_check:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 3s
+  
+  frontend:
+    image: ""
+    container_name: poc-1-frontend
+    volumes:
+      - web_vol:/app/dist/
+      
+  nginx:
+    image: nginx:1.31-alpine
+    restart: always
+    depends_on:
+      frontend: 
+        condition: service_completed_successfully
+        required: true
+    volumes:
+      - ./Nginx/dev.conf:/etc/nginx/nginx.conf
+      - web_vol:/usr/share/nginx/html
+
+  api-layer-init:
+    image: ""  
+    command: |
+      sh
+      -c
+      set -e
+      python manage.py seed
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AWS_SECRET_ACCESS_KEY:
+      AWS_SECRET_KEY_ID:
+      AWS_REGION:
+      DJANGO_SETTINGS_MODULE: "api_layer.settings.dev"
+  
+  api-layer:
+    image: ""
+    ports:
+      - "8000"
+    command: gunicorn api.wsgi:application --bind 0.0.0.0:8000
+      --worker-class gthread
+      --workers 2
+      --threads 2
+      --access-logfile -
+    depends_on:
+      api-layer-init:
+        condition: service_completed_successfully
+        required: true
+    environment:
+      AWS_SECRET_ACCESS_KEY:
+      AWS_SECRET_KEY_ID:
+      AWS_REGION:
+      DJANGO_SETTINGS_MODULE: "api_layer.settings.dev"
+  
+  api-layer-celery-worker:
+    image: ""
+    ports:
+      - "8000"
+    command: celery -A api worker 
+      --loglevl=INFO 
+      --pool=gevent 
+      --concurrency=50
+      --time-limit=60
+    depends_on:
+      api-layer-init:
+        condition: service_completed_successfully
+        required: true
+      redis:
+        required: true
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.8"
+          memory: "512M"
+    environment:
+      AWS_SECRET_ACCESS_KEY:
+      AWS_SECRET_KEY_ID:
+      AWS_REGION:
+      DJANGO_SETTINGS_MODULE: "api_layer.settings.dev"
+    
+  ai-layer:
+    image: ""
+    container_name: poc-1-ai-layer
+    ports:
+      - "5678"
+    command: gunicorn app:app
+      --workers 4
+      --bind 0.0.0.0:5678
+      --worker-class uvicorn.workers.UvicornWorker
+      --timeout 120
+      --keep-alive 5
+      --access-logfile -
+    deploy:
+      resources:
+        limits:
+          memory: "512M"
+          cpus: 1
+        reservations:
+          memory: "256M"
+          cpus: "0.4"
+          
+    mcp-layer:
+      image:
+      container_name: poc-1-mcp-layer
+      ports:
+        - 4567:4567
+      coomand: gunicorn mcp_server:app
+        --workers 4
+        --bind 0.0.0.0:4567
+        --worker-class uvicorn.workers.UvicornWorker
+        --access-logfile -
+
+volumes:
+  postgres_data_vol:
+  web_vol:
+
+networks:
+  poc-1-network:
+    driver: bridge

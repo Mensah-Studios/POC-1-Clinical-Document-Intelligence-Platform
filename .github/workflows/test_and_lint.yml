@@ -1,5 +1,5 @@
-name: Run Specs and Linter
-run-name: Run Specs
+name: Run Specs, Test Coverage and Linter Inspections
+run-name: Run Specs, Test Coverage and Linter Inspections
 
 on:
   pull-request:
@@ -35,7 +35,6 @@ jobs:
 
       - name: Check if tests are passing
         run: uv run pytest --cov=src/ai_layer --cov-report=xml Tests/
-    
 
       - name: Check if additional code has tests
         run: uv run diff-cover coverage.xml --compare_branch origin/${{  github.base_ref }} --fail-under=90
@@ -60,10 +59,9 @@ jobs:
 
       - name: Check if tests are passing
         run: uv run pytest --cov=src/api_layer --cov-report=xml Tests/
-    
 
       - name: Check if additional code has tests
-        run: uv run diff-cover coverage.xml --compare_branch origin/${{  github.base_ref }} --fail-under=90
+        run: uv run diff-cover coverage.xml --compare_branch origin/${{ github.base_ref }} --fail-under=90
 
   frontend_specs:
     name: Run Frontend specs

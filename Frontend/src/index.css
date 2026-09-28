@@ -1,3 +1,55 @@
+@import 'tailwindcss';
+
+@font-face {
+  font-family: 'Heading' ;
+  src: url('./src/assets/SchibstedGrotesk-Regular.woff2') format('woff2');
+};
+
+@font-face {
+  font-family: 'Heading-Italic';
+  src: url('./src/assets/SchibstedGrotesk-Italic.woff2') format('woff2');
+};
+
+@font-face {
+  font-family: 'Body-Italic';
+  src: url('./src/assets/Geist-Italic.woff2') format('woff2');
+};
+
+@font-face {
+  font-family: 'Body';
+  src: url('./src/assets/Geist-Regular.woff2') format('woff2');
+};
+
+@theme {
+  --font-body: 'Body', sans-serif;
+  --font-heading: 'Heading', sans-serif;
+
+  --color-teal-1: #0F766E;
+  --color-teal-2: #115E59;
+
+  --color-green-1: #10B981;
+  --color-green-2: #ECFDF5;
+
+  --color-slate-1: #0F172A;
+  --color-slate-2: #334155;
+  --color-slate-3: #64748B;
+
+  --color-surface-1: #FFF;
+  --color-surface-2: #F8FAFC;
+  --color-surface-3: #F0FDFA;
+
+  --color-border-color: #E2E8F0;
+  
+  --color-warning-1: #F59E0B;
+  --color-warning-2: #FFFBEB;
+
+  --color-danger-1: #EF4444;
+  --color-danger-2: #FEF2F2;
+  --color-danger-3: #FCA5A5;
+
+
+}
+
 :root {
   --text: #6b6375;
   --text-h: #08060d;

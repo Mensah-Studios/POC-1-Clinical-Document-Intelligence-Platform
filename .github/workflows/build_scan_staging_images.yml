@@ -1,0 +1,174 @@
+name:  Build Staging Images
+run-name: Build Staging Images
+
+on:
+  push:
+    branches:
+      - integration
+
+env:
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_DEV_ACCOUNT_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_DEV_SECRET_ACCESS_KEY }}
+  AWS_ACCESS_KEY: ${{ secrets.AWS_DEV_ACCESS_KEY }}
+  AWS_REGION: ${{ secrets.AWS_DEV_REGION }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  AWS_AI_IMAGE_REPO: ${{ secrets.AWS_AI_IMAGE_REPO }}
+  AWS_API_IMAGE_REPO: ${{ secrets.AWS_API_IMAGE_REPO }}
+  AWS_FRONTEND_IMAGE_REPO: ${{ secrets.AWS_FRONTEND_IMAGE_REPO }}
+  GITHUB_SHA: ${{ github.sha }}
+  IMAGE_NAME: poc-1-primary-staging-image
+
+jobs:
+  checkout_code:
+    name: Checkout Code
+    runs-on: unbuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+  validate_aws_credentials:
+    name: Validate AWS Credentials
+    uses: aws-actions/configure-aws-credentials@v6
+    with:
+      aws-access-key-id: ${{ env.AWS_ACCESS_KEY }}
+      aws-secret-access-key-id: ${{ env.AWS_SECRET_ACCESS_KEY }}
+      aws-region: ${{ env.AWS_REGION }}
+
+  scan_and_build_ai_layer_image:
+    name: Scan and Build AI Service Image
+    uses: ubuntu-latest
+    steps:
+      - name: Docker Authenticate
+        uses: docker/login-action@v4
+        id: docker-login
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Scan Dockerfile
+        use: hadolint/hadolint@v4
+        with:
+          dockerfile: AI-Layer/src/ai_layer/Dockerfiles/Dockerfile.dev
+
+      - name: Build Docker Image
+        with:
+          script: |
+            cd AI-Layer/src/ai_layer
+            docker buildx build --load \
+            -t ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_AI_IMAGE_REPO}}:${{env.IMAGE_NAME}} \
+            -t ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_AI_IMAGE_REPO}}:${{ env.GITHUB_SHA }}
+            -f Dockerfiles/Dockerfile.dev
+
+      - name: Scan Docker Image
+        uses: docker/scout-action@v1
+        id: scan-docker-image
+        with:
+          command: cves
+          only-severities: critical,high
+          summary: true
+          image: ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_AI_IMAGE_REPO}}:${{env.IMAGE_NAME}}
+
+
+  scan_and_build_api_layer_image:
+    name: Scan and Build API Service Image
+    uses: ubuntu-latest
+    steps:
+      - name: Docker Authenticate
+        uses: docker/login-action@v4
+        id: docker-login
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Scan Dockerfile
+        use: hadolint/hadolint@v4
+        with:
+          dockerfile: API-Layer/src/api_layer/Dockerfiles/Dockerfile.dev
+
+      - name: Build Docker Image
+        with:
+          script: |
+            cd API-Layer/src/api_layer
+            docker buildx build --load \
+            -t ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_API_IMAGE_REPO}}:${{env.IMAGE_NAME}} \
+            -t ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_API_IMAGE_REPO}}:${{ env.GITHUB_SHA }}
+            -f Dockerfiles/Dockerfile.dev
+
+      - name: Scan Docker Image
+        uses: docker/scout-action@v1
+        id: scan-docker-image
+        with:
+          command: cves
+          only-severities: critical,high
+          summary: true
+          image: ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_API_IMAGE_REPO}}:${{env.IMAGE_NAME}}
+
+  scan_and_build_frontend_image:
+    name: Scan and Build frontend Image
+    uses: ubuntu-latest
+    steps:
+      - name: Docker Authenticate
+        uses: docker/login-action@v4
+        id: docker-login
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Scan Dockerfile
+        use: hadolint/hadolint@v4
+        with:
+          dockerfile: Frontend/Dockerfiles/Dockerfile
+
+      - name: fetch_ssm_secrets
+        script: |
+          CONFIG_JSON=$(aws ssm get-parameter \
+          --region ${{ env.AWS_REGION }} \
+          --name /mensah-studios/POC-1/staging/keys \
+          --with-decryption \
+          --query Parameter.Value \
+          --output text
+          )
+      - name: Build Docker Image
+        with:
+          script: |
+            cd Frontend/
+            docker buildx build --load \
+            --build
+            -t ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_FRONTEND_IMAGE_REPO}}:${{env.IMAGE_NAME}} \
+            -t ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_FRONTEND_IMAGE_REPO}}:${{ env.GITHUB_SHA }}
+            -f Dockerfiles/Dockerfile
+
+      - name: Scan Docker Image
+        uses: docker/scout-action@v1
+        id: scan-docker-image
+        with:
+          command: cves
+          only-severities: critical,high
+          summary: true
+          image: ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_FRONTEND_IMAGE_REPO}}:${{env.IMAGE_NAME}}
+
+  push_images_to_aws_ecr:
+    name: Push all Images to ECR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to AWS ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push AI Images
+        with:
+          script: |
+            docker push ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_AI_IMAGE_REPO}}:${{env.IMAGE_NAME}}
+            docker push ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_AI_IMAGE_REPO}}:${{ env.GITHUB_SHA }}
+
+      - name: Push API Images
+        with:
+          script: |
+            docker push ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_API_IMAGE_REPO}}:${{env.IMAGE_NAME}}
+            docker push ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_API_IMAGE_REPO}}:${{ env.GITHUB_SHA }}
+
+      - name: Push Frontend Images
+        with:
+          script: |
+            docker push ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_FRONTEND_IMAGE_REPO}}:${{env.IMAGE_NAME}}
+            docker push ${{env.AWS_ACCOUNT_ID}}.dkr.ecs.${{ env.AWS_REGION }}.amazonaws.com/${{AWS_FRONTEND_IMAGE_REPO}}:${{ env.GITHUB_SHA }}

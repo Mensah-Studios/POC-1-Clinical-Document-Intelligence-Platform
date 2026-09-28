@@ -28,3 +28,18 @@ ai-layer = "ai_layer:main"
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "diff-cover>=10.5.1",
+    "pylint>=4.0.8",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.coverage.run]
+source = ["src/ai_layer"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80

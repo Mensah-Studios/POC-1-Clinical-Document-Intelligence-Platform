@@ -4,8 +4,7 @@ run-name: Run Specs, Test Coverage and Linter Inspections
 on:
   pull-request:
     branches:
-      - integration
-      - main
+      - '**'
 
 jobs:
   checkout_code:
@@ -75,10 +74,10 @@ jobs:
           package-manager-cache: false
 
       - name: Install Dependencies
-        run: npm ci
+        run: cd Frontend && npm ci
 
       - name: Run Tests
-        run: npm test
+        run: cd Frontend && npm test
 
 
 
